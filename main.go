@@ -35,7 +35,7 @@ func main() {
 	printers[2] = "http://10.0.0.20"
 
 	for i := 0; i < len(printers); i++ {
-		// Get request
+		// Get request - check printer status
 		resp, err := http.Get(printers[i] + "/printer/info")
 		if err != nil {
 			fmt.Println("No response from request")
@@ -47,6 +47,7 @@ func main() {
 		if err := json.Unmarshal(body, &result); err != nil { // Parse []byte to the go struct pointer
 			fmt.Println("Can not unmarshal JSON")
 		}
+		// Print status for dev
 		fmt.Print("Printer: ")
 		fmt.Println(result.Result.Hostname)
 		fmt.Print("State: ")
