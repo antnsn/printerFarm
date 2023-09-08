@@ -5,7 +5,7 @@ FROM golang:latest
 WORKDIR /app
 
 # Copy the current directory contents into the container at /app
-COPY . /app
+COPY ./app /app
 
 # Build the Go application
 RUN go build -o printer-monitor
