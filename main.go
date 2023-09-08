@@ -1,57 +1,142 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"mime/multipart"
 	"net/http"
+	"os"
 )
 
-type Response struct {
-	Result struct {
-		StateMessage    string `json:"state_message"`
-		KlipperPath     string `json:"klipper_path"`
-		ConfigFile      string `json:"config_file"`
-		SoftwareVersion string `json:"software_version"`
-		Hostname        string `json:"hostname"`
-		CPUInfo         string `json:"cpu_info"`
-		State           string `json:"state"`
-		PythonPath      string `json:"python_path"`
-		LogFile         string `json:"log_file"`
-	} `json:"result"`
+type PrinterInfoResponse struct {
+	Result PrinterStatus `json:"result"`
 }
 
-// PrettyPrint to print struct in a readable way
-func PrettyPrint(i interface{}) string {
-	s, _ := json.MarshalIndent(i, "", "\t")
-	return string(s)
+type PrinterStatus struct {
+	State           string `json:"state"`
+	StateMessage    string `json:"state_message"`
+	Hostname        string `json:"hostname"`
+	KlipperPath     string `json:"klipper_path"`
+	PythonPath      string `json:"python_path"`
+	LogFile         string `json:"log_file"`
+	ConfigFile      string `json:"config_file"`
+	SoftwareVersion string `json:"software_version"`
+	CPUInfo         string `json:"cpu_info"`
 }
 
 func main() {
-
-	var printers [3]string
-	printers[0] = "http://sw.home"
-	printers[1] = "http://v0.home"
-	printers[2] = "http://10.0.0.20"
-
-	for i := 0; i < len(printers); i++ {
-		// Get request - check printer status
-		resp, err := http.Get(printers[i] + "/printer/info")
-		if err != nil {
-			fmt.Println("No response from request")
-		}
-		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body) // response body is []byte
-
-		var result Response
-		if err := json.Unmarshal(body, &result); err != nil { // Parse []byte to the go struct pointer
-			fmt.Println("Can not unmarshal JSON")
-		}
-		// Print status for dev
-		fmt.Print("Printer: ")
-		fmt.Println(result.Result.Hostname)
-		fmt.Print("State: ")
-		fmt.Println(result.Result.State)
-
+	// Check if the script was provided with a file argument
+	if len(os.Args) != 2 {
+		fmt.Println("Usage: ./printer-monitor <file_path>")
+		return
 	}
+
+	filePath := os.Args[1] // Get the file path from the command-line argument
+
+	// Define a list of Mainsail API endpoints for printer status
+	statusURLs := []string{
+		//"http://printer1-api.example.com/api/printer/info",
+		//"http://printer2-api.example.com/api/printer/info",
+		"https://ender.local.antnsn.dev/printer/info", // Add the new status URL here
+	}
+
+	// Iterate through the list of printer status URLs
+	for _, statusURL := range statusURLs {
+		// Send a GET request to the API endpoint to get printer status
+		response, err := http.Get(statusURL)
+		if err != nil {
+			fmt.Println("Error:", err)
+			continue // Continue to the next printer URL on error
+		}
+		defer response.Body.Close()
+
+		// Check if the response status code is 200 (OK)
+		if response.StatusCode != http.StatusOK {
+			fmt.Println("Error: Unexpected status code", response.StatusCode)
+			continue // Continue to the next printer URL on error
+		}
+
+		// Decode the JSON response
+		var infoResponse PrinterInfoResponse
+		if err := json.NewDecoder(response.Body).Decode(&infoResponse); err != nil {
+			fmt.Println("Error:", err)
+			continue // Continue to the next printer URL on error
+		}
+
+		// Check if the printer is in the "ready" state
+		if infoResponse.Result.State == "ready" {
+			processReadyPrinter(infoResponse.Result, statusURL, filePath)
+			return // Exit the loop once a ready printer is found
+		}
+	}
+
+	fmt.Println("No printer with state 'ready' found.")
+}
+
+// processReadyPrinter processes the action for a printer with state "ready"
+func processReadyPrinter(printer PrinterStatus, statusURL string, filePath string) {
+	// Implement your action here, e.g., send a file to OctoPrint with 'printer.Hostname'
+	fmt.Printf("Printer with hostname '%s' is 'ready'. Taking action...\n", printer.Hostname)
+	// Add your code to send a file to OctoPrint or perform any other action for this printer
+
+	// Example: Send the file specified in the command-line argument to OctoPrint
+	sendFileToOctoPrint(printer, filePath)
+}
+
+// sendFileToOctoPrint sends a file to OctoPrint
+func sendFileToOctoPrint(printer PrinterStatus, filePath string) {
+	// Open the file for reading
+	file, err := os.Open(filePath)
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return
+	}
+	defer file.Close()
+
+	// Create a buffer for the file content
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// Create a form field for the file
+	part, err := writer.CreateFormFile("file", filePath)
+	if err != nil {
+		fmt.Println("Error creating form file:", err)
+		return
+	}
+
+	// Copy the file content to the form field
+	_, err = io.Copy(part, file)
+	if err != nil {
+		fmt.Println("Error copying file content:", err)
+		return
+	}
+
+	// Close the multipart writer
+	writer.Close()
+
+	// Create a POST request to send the file to OctoPrint
+	octoPrintURL := fmt.Sprintf("http://%s/api/files/local", printer.Hostname) // Change the URL as needed
+	req, err := http.NewRequest("POST", octoPrintURL, body)
+	if err != nil {
+		fmt.Println("Error creating POST request:", err)
+		return
+	}
+
+	// Set the API key as a header (replace 'YOUR_API_KEY' with your OctoPrint API key)
+	req.Header.Set("X-Api-Key", "YOUR_API_KEY")
+
+	// Set the Content-Type header
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	// Send the request
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Println("Error sending file to OctoPrint:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	fmt.Printf("File sent to OctoPrint on printer '%s'\n", printer.Hostname)
 }
