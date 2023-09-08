@@ -8,4 +8,4 @@ RUN CGO_ENABLED=0 go build -o go-printerfarm
 FROM scratch
 COPY --from=build /app/go-printerfarm /
 EXPOSE 8080  # Expose the port your Go application listens on
-CMD ["/myapp"]
+CMD ["/go-printerfarm"]
