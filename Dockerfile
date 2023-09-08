@@ -1,17 +1,11 @@
-# Use an official Golang runtime as a parent image
-FROM golang:alpine
-
-# Set the working directory to /app
+# Stage 1: Build the application
+FROM golang:1.16-alpine AS build
 WORKDIR /app
-
-# Copy the current directory contents into the container at /app
 COPY . .
+RUN CGO_ENABLED=0 go build -o go-printerfarm
 
-# Build the Go application
-RUN go build -o go-printerFarm
-
-# Expose the port for communication (if needed)
-EXPOSE 8080
-
-# Run the printer-monitor binary when the container launches
-CMD ["./go-printerFarm"]
+# Stage 2: Create a smaller runtime image
+FROM scratch
+COPY --from=build /app/go-printerfarm /
+EXPOSE 8080  # Expose the port your Go application listens on
+CMD ["/myapp"]
