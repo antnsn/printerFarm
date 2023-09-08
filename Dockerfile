@@ -7,5 +7,5 @@ RUN CGO_ENABLED=0 go build -o go-printerfarm
 # Stage 2: Create a smaller runtime image
 FROM scratch
 COPY --from=build /app/go-printerfarm /
-EXPOSE 8080  # Expose the port your Go application listens on
+EXPOSE 8080
 CMD ["/go-printerfarm"]
