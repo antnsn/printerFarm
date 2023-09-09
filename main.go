@@ -31,6 +31,9 @@ type PrinterStatus struct {
 	CPUInfo         string `json:"cpu_info"`
 }
 
+// Define a channel to signal when a new file has been uploaded
+var newUploadChan = make(chan struct{})
+
 func main() {
 	// Check if the "uploads" folder exists, and create it if not
 	if _, err := os.Stat(uploadFolder); os.IsNotExist(err) {
@@ -90,6 +93,9 @@ func main() {
 			}
 		}
 
+		// Wait for a signal that a new upload has been processed
+		<-newUploadChan
+
 		// Sleep for the specified polling interval
 		time.Sleep(pollingInterval)
 	}
@@ -118,7 +124,6 @@ func checkForNewUploads() string {
 func sendFileToOctoPrint(printer PrinterStatus, printerURL string, filePath string) {
 	// Create a POST request to send the file to the printer's upload endpoint
 	octoPrintURL := fmt.Sprintf("%s/files/upload", printerURL)
-
 	// Open the file for reading
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -127,7 +132,7 @@ func sendFileToOctoPrint(printer PrinterStatus, printerURL string, filePath stri
 	}
 	defer file.Close()
 
-	// Create a buffer for the file content
+	// Create a new buffer for the request body
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -158,7 +163,7 @@ func sendFileToOctoPrint(printer PrinterStatus, printerURL string, filePath stri
 	// Set the API key as a header (replace 'YOUR_API_KEY' with your OctoPrint API key)
 	req.Header.Set("X-Api-Key", "YOUR_API_KEY")
 
-	// Set the Content-Type header
+	// Set the Content-Type header to indicate multipart/form-data
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	// Send the request
@@ -179,16 +184,19 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the file from the request
-	file, _, err := r.FormFile("file") // "file" should match the field name in the form
+	file, fileHeader, err := r.FormFile("file") // "file" should match the field name in the form
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error retrieving file: %s", err), http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
-	// Save the file to the "uploads" folder
-	fileName := fmt.Sprintf("%s/%s", uploadFolder, "uploaded_file.txt") // Change the filename as needed
-	dst, err := os.Create(fileName)
+	// Get the original filename
+	originalFilename := fileHeader.Filename
+
+	// Save the file to the "uploads" folder with the original filename
+	filePath := fmt.Sprintf("%s/%s", uploadFolder, originalFilename)
+	dst, err := os.Create(filePath)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error creating file: %s", err), http.StatusInternalServerError)
 		return
@@ -201,9 +209,12 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Signal that a new upload has been processed
+	newUploadChan <- struct{}{}
+
 	// Respond with a success message
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "File uploaded successfully!")
+	fmt.Fprintf(w, "File '%s' uploaded successfully!", originalFilename)
 }
 
 func startUploadServer() {
