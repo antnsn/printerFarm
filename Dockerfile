@@ -1,19 +1,18 @@
-# Stage 1: Build the application
-# Use the official Golang image as a parent image
-FROM golang:1.17-alpine AS builder
+# Use a lightweight Python image as the base image
+FROM python:3-slim
+
+# Set the working directory in the container
 WORKDIR /app
-COPY go.mod .
-RUN go mod download
-COPY . .
 
+# Copy the application files into the container
+COPY requirements.txt .
+COPY printerfarm.py .
 
-# Stage 2: Create a smaller runtime image
-# Build the Go application
-RUN go build -o go-printerfarm .
-FROM alpine:latest
-WORKDIR /app
-COPY --from=builder /app/go-printerfarm .
-EXPOSE 8080
+# Install any required Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Start the Go application
-CMD ["./go-printerfarm"]
+# Expose the port that Flask will run on (usually 5000)
+EXPOSE 5000
+
+# Define the command to run your Flask application
+CMD ["python", "printerfarm.py"]
