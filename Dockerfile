@@ -1,24 +1,22 @@
-# Use a lightweight Python image as the base image
-FROM python:3-slim
+# Use the official Python image from the Docker Hub
+FROM python:3.9-slim
 
-# Set the working directory in the container
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Create and set the working directory in the container
 WORKDIR /app
 
-# Copy the application files into the container
-COPY requirements.txt .
-COPY printerfarm.py .
-
-# Create a directory for the frontend files
-RUN mkdir -p /app/frontend
-
-# Copy the index.html file into the frontend directory
-COPY frontend/index.html /app/frontend/
-
-# Install any required Python dependencies
+# Copy the requirements file into the container and install dependencies
+COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose the port that Flask will run on (usually 5000)
+# Copy the rest of your application code into the container
+COPY . /app/
+
+# Expose port 5000 (the port your Flask app will run on)
 EXPOSE 5000
 
-# Define the command to run your Flask application
+# Command to run the application
 CMD ["python", "printerfarm.py"]
