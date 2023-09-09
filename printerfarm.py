@@ -138,6 +138,7 @@ def get_printer_states():
 def printer_states():
     return jsonify(get_printer_states())
 
+@app.route('/')
 def homepage():
     return render_template('frontend/index.html')    
 
