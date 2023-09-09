@@ -1,28 +1,24 @@
-# Go Script for Printer Monitoring and File Sending
+# Project Name: PrinterFarm - 3D Printer File Distribution
 
-This Go script is designed for monitoring multiple 3D printers' statuses and automatically sending a file to a printer when it's in the "ready" state. It communicates with each printer's API endpoint to retrieve its status and takes action based on the status.
+Description:
+PrinterFarm is a specialized Flask-based application designed to simplify the distribution of 3D printing files to a fleet of 3D printers. The project's core objective is to automate the selection of an available 3D printer that is in the "ready" state and send the print job to it. Key features of the project include:
 
-## Features:
+## 1. Auto Printer Selection:
 
-- Monitors multiple 3D printers.
-- Automatically sends a file to a printer when it's "ready."
-- Flexible and extensible for integrating with different printer APIs.
+PrinterFarm intelligently selects an available 3D printer that is in the "ready" state from a pool of configured printers. This automation eliminates the need for users to manually choose a printer for each print job.
+## 2. File Upload Endpoint:
 
-## Usage:
+Users can easily send 3D model or G-code files to PrinterFarm using a dedicated API endpoint. The application takes care of file handling and distribution to the selected printer.
 
-1. Define the list of printer API endpoints in the `statusURLs` variable.
-2. The script iterates through the printer URLs and retrieves their statuses.
-3. If a printer is found in the "ready" state, it triggers an action (e.g., file sending) for that printer.
-4. Customize the action in the `processReadyPrinter` function as needed.
+## 3. Real-time Printer Status:
 
-## Configuration:
+PrinterFarm provides real-time status information about each connected 3D printer. Users can monitor the readiness and states of their printers through the web interface.
 
-- Customize the list of printer URLs in the `statusURLs` variable.
-- Modify the action taken when a printer is "ready" in the `processReadyPrinter` function.
+## 4. Error Handling and Notifications:
 
-## Prerequisites:
+The application includes robust error handling to manage cases where printers are unavailable or file uploads encounter issues. Users receive clear notifications about the success or failure of their print jobs.
+Getting Started:
+To start using PrinterFarm, users need to have Docker installed on their systems. The process involves cloning the project repository, building the Docker image, running a Docker container, and accessing the PrinterFarm web interface through a web browser.
 
-- Printers accepting the same sliced gcode
-- Printers must be running mainsail and klipper
-- Go (Golang) installed on your system.
-- Access to the printer API endpoints.
+Contributing:
+PrinterFarm is an open-source project that welcomes contributions from the community. Contributors can follow standard Git and GitHub practices to fork the repository, create branches for new features or bug fixes, and submit pull requests to the main repository.

@@ -8,6 +8,10 @@ WORKDIR /app
 COPY requirements.txt .
 COPY printerfarm.py .
 
+# Create a directory for the frontend files and copy them
+RUN mkdir frontend
+COPY index.html frontend/
+
 # Install any required Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 

@@ -1,7 +1,7 @@
 import os
 import json
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import time  # Import the time module
 
 app = Flask(__name__)
@@ -137,6 +137,9 @@ def get_printer_states():
 @app.route('/printer_states', methods=['GET'])
 def printer_states():
     return jsonify(get_printer_states())
+
+def homepage():
+    return render_template('frontend/index.html')    
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

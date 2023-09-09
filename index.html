@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Printer Status and File Upload</title>
+</head>
+<body>
+    <h1>3D Printer Status</h1>
+    <p>Printer State: <span id="printerState">Loading...</span></p>
+
+    <h2>Upload a File</h2>
+    <input type="file" id="fileInput" accept=".stl,.gcode">
+    <button onclick="uploadFile()">Upload</button>
+
+    <h2>Upload Status</h2>
+    <p id="uploadStatus"></p>
+
+    <script>
+        // JavaScript code for updating printer state
+        function updatePrinterState() {
+            // Make an API request to get printer state from your Python Flask application
+            fetch('/printer_states')
+                .then(response => response.json())
+                .then(data => {
+                    const printerState = data['http://your-printer-url.com']; // Replace with your printer's URL
+                    document.getElementById('printerState').textContent = printerState;
+                })
+                .catch(error => {
+                    console.error('Error fetching printer state:', error);
+                    document.getElementById('printerState').textContent = 'Error';
+                });
+        }
+
+        // Function to upload a file to the Python Flask application
+        function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a file to upload.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const message = data.message;
+                document.getElementById('uploadStatus').textContent = message;
+            })
+            .catch(error => {
+                console.error('Error uploading file:', error);
+                document.getElementById('uploadStatus').textContent = 'Error';
+            });
+        }
+
+        // Periodically update the printer state (e.g., every 5 seconds)
+        setInterval(updatePrinterState, 5000);
+    </script>
+</body>
+</html>
