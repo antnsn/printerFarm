@@ -11,9 +11,9 @@ import (
 	"time"
 )
 
-const pollingInterval = 10 * time.Second // Set the polling interval here (e.g., 10 seconds)
-const uploadEndpoint = "/upload"         // Define the endpoint for file uploads
-const uploadFolder = "uploads"           // Define the folder for uploaded files
+const pollingInterval = 10 * time.Second
+const uploadEndpoint = "/upload"
+const uploadFolder = "uploads"
 
 type PrinterInfoResponse struct {
 	Result PrinterStatus `json:"result"`
@@ -41,50 +41,51 @@ func main() {
 		}
 	}
 
+	// Start the file upload server
+	go startUploadServer()
+
 	// Print the monitoring message with the polling interval
 	fmt.Printf("Monitoring printers with a polling interval of %s...\n", pollingInterval)
 
-	// Define a list of printer URLs (without /printer/info)
+	// Define a list of printer URLs
 	printerURLs := []string{
-		"https://ender.local.antnsn.dev", // Add your printer URLs here
-	}
-
-	// Modify the printerURLs slice to include /printer/info for each printer
-	for i, url := range printerURLs {
-		printerURLs[i] = fmt.Sprintf("%s/printer/info", url)
+		"https://ender.local.antnsn.dev", // Add the printer URLs here
+		// Add more printer URLs as needed
 	}
 
 	// Infinite loop for continuous monitoring
 	for {
-		// Iterate through the list of printer URLs
-		for _, url := range printerURLs {
-			// Send a GET request to the API endpoint to get printer status
-			response, err := http.Get(url)
-			if err != nil {
-				fmt.Println("Error:", err)
-				continue // Continue to the next printer URL on error
-			}
-			defer response.Body.Close()
+		// Check for new uploads in the "uploads" folder
+		filePath := checkForNewUploads()
+		if filePath != "" {
+			// Iterate through the list of printer URLs
+			for _, printerURL := range printerURLs {
+				// Send a GET request to the API endpoint to get printer status
+				response, err := http.Get(printerURL + "/printer/info")
+				if err != nil {
+					fmt.Println("Error:", err)
+					continue // Continue to the next printer URL on error
+				}
+				defer response.Body.Close()
 
-			// Check if the response status code is 200 (OK)
-			if response.StatusCode != http.StatusOK {
-				fmt.Println("Error: Unexpected status code", response.StatusCode)
-				continue // Continue to the next printer URL on error
-			}
+				// Check if the response status code is 200 (OK)
+				if response.StatusCode != http.StatusOK {
+					fmt.Println("Error: Unexpected status code", response.StatusCode)
+					continue // Continue to the next printer URL on error
+				}
 
-			// Decode the JSON response
-			var infoResponse PrinterInfoResponse
-			if err := json.NewDecoder(response.Body).Decode(&infoResponse); err != nil {
-				fmt.Println("Error:", err)
-				continue // Continue to the next printer URL on error
-			}
+				// Decode the JSON response
+				var infoResponse PrinterInfoResponse
+				if err := json.NewDecoder(response.Body).Decode(&infoResponse); err != nil {
+					fmt.Println("Error:", err)
+					continue // Continue to the next printer URL on error
+				}
 
-			// Check if the printer is in the "ready" state
-			if infoResponse.Result.State == "ready" {
-				// Check for new uploads in the "uploads" folder
-				filePath := checkForNewUploads()
-				if filePath != "" {
-					processReadyPrinter(infoResponse.Result, url, filePath)
+				// Check if the printer is in the "ready" state
+				if infoResponse.Result.State == "ready" {
+					// Send the file to the printer's ready status URL
+					sendFileToOctoPrint(infoResponse.Result, printerURL, filePath)
+					break // Exit the loop after sending the file to the first ready printer
 				}
 			}
 		}
@@ -113,20 +114,10 @@ func checkForNewUploads() string {
 	return ""
 }
 
-// processReadyPrinter processes the action for a printer with state "ready"
-func processReadyPrinter(printer PrinterStatus, printerURL string, filePath string) {
-	// Implement your action here, e.g., send a file to OctoPrint with 'printer.Hostname'
-	fmt.Printf("Printer with hostname '%s' is 'ready'. Taking action...\n", printer.Hostname)
-	// Add your code to send a file to OctoPrint or perform any other action for this printer
-
-	// Example: Send the file to the printer's upload endpoint
-	sendFileToPrinter(printer, printerURL, filePath)
-}
-
-// sendFileToPrinter sends a file to the printer's upload endpoint
-func sendFileToPrinter(printer PrinterStatus, printerURL string, filePath string) {
+// sendFileToOctoPrint sends a file to OctoPrint
+func sendFileToOctoPrint(printer PrinterStatus, printerURL string, filePath string) {
 	// Create a POST request to send the file to the printer's upload endpoint
-	uploadURL := fmt.Sprintf("%s/files/upload", printerURL)
+	octoPrintURL := fmt.Sprintf("%s/files/upload", printerURL)
 
 	// Open the file for reading
 	file, err := os.Open(filePath)
@@ -157,12 +148,15 @@ func sendFileToPrinter(printer PrinterStatus, printerURL string, filePath string
 	// Close the multipart writer
 	writer.Close()
 
-	// Create a POST request to send the file to the printer's upload endpoint
-	req, err := http.NewRequest("POST", uploadURL, body)
+	// Create a POST request to send the file to OctoPrint
+	req, err := http.NewRequest("POST", octoPrintURL, body)
 	if err != nil {
 		fmt.Println("Error creating POST request:", err)
 		return
 	}
+
+	// Set the API key as a header (replace 'YOUR_API_KEY' with your OctoPrint API key)
+	req.Header.Set("X-Api-Key", "YOUR_API_KEY")
 
 	// Set the Content-Type header
 	req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -170,10 +164,50 @@ func sendFileToPrinter(printer PrinterStatus, printerURL string, filePath string
 	// Send the request
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		fmt.Println("Error sending file to printer:", err)
+		fmt.Println("Error sending file to OctoPrint:", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	fmt.Printf("File sent to printer '%s'\n", printer.Hostname)
+	fmt.Printf("File sent to OctoPrint on printer '%s'\n", printer.Hostname)
+}
+
+func uploadHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get the file from the request
+	file, _, err := r.FormFile("file") // "file" should match the field name in the form
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error retrieving file: %s", err), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Save the file to the "uploads" folder
+	fileName := fmt.Sprintf("%s/%s", uploadFolder, "uploaded_file.txt") // Change the filename as needed
+	dst, err := os.Create(fileName)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error creating file: %s", err), http.StatusInternalServerError)
+		return
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, file)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error copying file data: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Respond with a success message
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "File uploaded successfully!")
+}
+
+func startUploadServer() {
+	http.HandleFunc(uploadEndpoint, uploadHandler)
+	fmt.Printf("File upload server listening on :8081%s...\n", uploadEndpoint)
+	http.ListenAndServe(":8081", nil)
 }
