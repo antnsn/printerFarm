@@ -34,7 +34,6 @@ func main() {
 	// Check if the script was provided with a file argument
 	if len(os.Args) != 2 {
 		fmt.Println("Error: Usage: ./printer-monitor <file_path>")
-		return // Exit the script if the argument count is incorrect
 	}
 
 	filePath := os.Args[1] // Get the file path from the command-line argument
@@ -42,7 +41,6 @@ func main() {
 	// Check if the provided file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		fmt.Println("Error: The provided file does not exist.")
-		return // Exit the script if the file does not exist
 	}
 
 	// Print the monitoring message with the polling interval
