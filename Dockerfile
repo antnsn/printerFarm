@@ -13,7 +13,7 @@ RUN go build -o go-printerfarm .
 FROM alpine:latest
 WORKDIR /app
 COPY --from=builder /app/go-printerfarm .
-EXPOSE 8081
+EXPOSE 8080
 
 # Start the Go application
 CMD ["./go-printerfarm"]
