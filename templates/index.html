@@ -15,13 +15,18 @@
     <p id="uploadStatus"></p>
 
     <script>
-        // JavaScript code for updating printer state
+        // Define the printerURLs variable from the Python code
+        const printerURLs = JSON.parse('{{ printerURLs | tojson | safe }}');
+
+        // Function to update printer state
         function updatePrinterState() {
-            // Make an API request to get printer state from your Python Flask application
+            // Make an API request to get printer state
             fetch('/printer_states')
                 .then(response => response.json())
                 .then(data => {
-                    const printerState = data['http://your-printer-url.com']; // Replace with your printer's URL
+                    // Use the first printer URL from printerURLs as an example
+                    const printerURL = printerURLs[0]; // You can loop through printerURLs as needed
+                    const printerState = data[printerURL];
                     document.getElementById('printerState').textContent = printerState;
                 })
                 .catch(error => {
@@ -30,7 +35,7 @@
                 });
         }
 
-        // Function to upload a file to the Python Flask application
+        // Function to upload a file
         function uploadFile() {
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
