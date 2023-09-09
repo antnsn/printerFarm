@@ -140,7 +140,8 @@ def printer_states():
 
 @app.route('/')
 def homepage():
-    return render_template('frontend/index.html')
+    return render_template('index.html', printerURLs=printerURLs)
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

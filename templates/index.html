@@ -17,38 +17,49 @@
     <script>
         // Define the printerURLs variable from the Python code
         const printerURLs = JSON.parse('{{ printerURLs | tojson | safe }}');
-
-        // Function to update printer state
+    
+        // Function to update printer state and hostname
         function updatePrinterState() {
-            // Make an API request to get printer state
-            fetch('/printer_states')
-                .then(response => response.json())
-                .then(data => {
-                    // Use the first printer URL from printerURLs as an example
-                    const printerURL = printerURLs[0]; // You can loop through printerURLs as needed
-                    const printerState = data[printerURL];
-                    document.getElementById('printerState').textContent = printerState;
-                })
-                .catch(error => {
-                    console.error('Error fetching printer state:', error);
-                    document.getElementById('printerState').textContent = 'Error';
-                });
+            // Loop through each printer URL
+            for (const printerURL of printerURLs) {
+                fetch(`${printerURL}/printer/info`)
+                    .then(response => response.json())
+                    .then(printerInfo => {
+                        // Extract the hostname and state from the received data
+                        const hostname = printerInfo.result.hostname;
+                        const state = printerInfo.result.state;
+                        
+                        // Create a message with hostname and state
+                        const message = `${hostname}: ${state}`;
+                        
+                        // Display the message
+                        const printerStateElement = document.getElementById('printerState');
+                        printerStateElement.textContent = message;
+                    })
+                    .catch(error => {
+                        console.error(`Error fetching printer state for ${printerURL}:`, error);
+                        document.getElementById('printerState').textContent = 'Error';
+                    });
+            }
         }
-
+    
         // Function to upload a file
         function uploadFile() {
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
-
+    
             if (!file) {
                 alert('Please select a file to upload.');
                 return;
             }
-
+    
             const formData = new FormData();
             formData.append('file', file);
-
-            fetch('/upload', {
+    
+            // Use the first printer URL as an example; you can modify this as needed
+            const printerURL = printerURLs[0];
+    
+            fetch(`${printerURL}/server/files/upload`, {
                 method: 'POST',
                 body: formData
             })
@@ -62,9 +73,12 @@
                 document.getElementById('uploadStatus').textContent = 'Error';
             });
         }
-
+    
         // Periodically update the printer state (e.g., every 5 seconds)
         setInterval(updatePrinterState, 5000);
     </script>
+    
+
+    
 </body>
 </html>
