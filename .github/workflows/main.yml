@@ -22,7 +22,7 @@ jobs:
       - name: Build and push Docker image
         run: |
           docker buildx create --use
-          docker buildx build --tag "${{ secrets.DOCKERHUB_USERNAME }}"/go-printerfarm:latest --push .
+          docker buildx build --tag "${{ secrets.DOCKERHUB_USERNAME }}"/printerfarm:latest --push .
         env:
           DOCKER_CLI_ACI: 1
         working-directory: ./  # Replace with the actual path
