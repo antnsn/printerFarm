@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+const pollingInterval = 10 * time.Second // Set the polling interval here (e.g., 10 seconds)
+
 type PrinterInfoResponse struct {
 	Result PrinterStatus `json:"result"`
 }
@@ -30,34 +32,30 @@ type PrinterStatus struct {
 func main() {
 	// Check if the script was provided with a file argument
 	if len(os.Args) != 2 {
-		fmt.Println("Usage: ./printer-monitor <file_path>")
-		return
+		fmt.Println("Error: Usage: ./printer-monitor <file_path>")
+		return // Exit the script if the argument count is incorrect
 	}
 
 	filePath := os.Args[1] // Get the file path from the command-line argument
 
+	// Check if the provided file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		fmt.Println("Error: The provided file does not exist.")
+		return // Exit the script if the file does not exist
+	}
+
+	// Print the monitoring message with the polling interval
+	fmt.Printf("Monitoring printers with a polling interval of %s...\n", pollingInterval)
+
 	// Define a list of Mainsail API endpoints for printer status
 	statusURLs := []string{
-		//"http://printer1-api.example.com/api/printer/info",
-		//"http://printer2-api.example.com/api/printer/info",
 		"https://ender.local.antnsn.dev/printer/info", // Add the new status URL here
 	}
 
-	// Create a map to track printers that have received a file
-	printerFileSent := make(map[string]bool)
-
-	// Define the polling interval (e.g., every 30 seconds)
-	pollingInterval := 30 * time.Second
-
-	// Infinite loop for monitoring
+	// Infinite loop for continuous monitoring
 	for {
 		// Iterate through the list of printer status URLs
 		for _, statusURL := range statusURLs {
-			// Check if the printer has already received a file
-			if printerFileSent[statusURL] {
-				continue
-			}
-
 			// Send a GET request to the API endpoint to get printer status
 			response, err := http.Get(statusURL)
 			if err != nil {
@@ -82,17 +80,18 @@ func main() {
 			// Check if the printer is in the "ready" state
 			if infoResponse.Result.State == "ready" {
 				processReadyPrinter(infoResponse.Result, statusURL, filePath)
-				printerFileSent[statusURL] = true // Mark the printer as having received a file
+				// No need to return; we want to continue monitoring other printers
 			}
 		}
 
-		// Sleep for the polling interval before checking again
+		// Sleep for the specified polling interval
 		time.Sleep(pollingInterval)
 	}
 }
 
 // processReadyPrinter processes the action for a printer with state "ready"
 func processReadyPrinter(printer PrinterStatus, statusURL string, filePath string) {
+	// Implement your action here, e.g., send a file to OctoPrint with 'printer.Hostname'
 	fmt.Printf("Printer with hostname '%s' is 'ready'. Taking action...\n", printer.Hostname)
 	// Add your code to send a file to OctoPrint or perform any other action for this printer
 
