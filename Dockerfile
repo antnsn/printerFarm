@@ -1,11 +1,19 @@
 # Stage 1: Build the application
-FROM golang:1.16-alpine AS build
+# Use the official Golang image as a parent image
+FROM golang:1.17-alpine AS builder
 WORKDIR /app
+COPY go.mod .
+RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o go-printerfarm
+
 
 # Stage 2: Create a smaller runtime image
-FROM scratch
-COPY --from=build /app/go-printerfarm /
-EXPOSE 8080
-CMD ["/go-printerfarm"]
+# Build the Go application
+RUN go build -o go-printerfarm .
+FROM alpine:latest
+WORKDIR /app
+COPY --from=builder /app/go-printerfarm .
+EXPOSE 8081
+
+# Start the Go application
+CMD ["./go-printerfarm"]
