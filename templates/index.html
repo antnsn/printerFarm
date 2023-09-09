@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
     <title>Printer Status and File Upload</title>
 </head>
 <body>
+    <main class="container">
     <h1>3D Printer Status</h1>
-    <p>Printer State: <span id="printerState">Loading...</span></p>
+    <h3>Printer State: <span id="printerState">Loading...</span></h3>
 
     <h2>Upload a File</h2>
     <input type="file" id="fileInput" accept=".stl,.gcode">
@@ -78,7 +80,7 @@
         setInterval(updatePrinterState, 5000);
     </script>
     
-
+</main>
     
 </body>
 </html>
