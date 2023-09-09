@@ -9,10 +9,10 @@ COPY requirements.txt .
 COPY printerfarm.py .
 
 # Create a directory for the frontend files
-RUN mkdir -p /app/templates
+RUN mkdir -p /app/frontend
 
-# Copy the index.html file into the templates directory
-COPY templates/index.html /app/templates/
+# Copy the index.html file into the frontend directory
+COPY frontend/index.html /app/frontend/
 
 # Install any required Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
