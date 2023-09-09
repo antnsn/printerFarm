@@ -7,10 +7,9 @@ import time  # Import the time module
 app = Flask(__name__)
 
 # Define the array of printer URLs
-printerURLs = [
-    "https://ender.local.antnsn.dev",
-    # Add more printer URLs as needed
-]
+# Read printer URLs from the environment variable
+printerURLs = os.environ.get("PRINTER_URLS", "").split(",")
+
 
 class PrinterStatus:
     def __init__(self, state, state_message, hostname, klipper_path, python_path, log_file, config_file, software_version, cpu_info):
