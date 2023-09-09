@@ -12,7 +12,6 @@ import (
 )
 
 const pollingInterval = 10 * time.Second // Set the polling interval here (e.g., 10 seconds)
-const uploadEndpoint = "/upload"         // Define the endpoint for file uploads
 
 type PrinterInfoResponse struct {
 	Result PrinterStatus `json:"result"`
@@ -31,61 +30,121 @@ type PrinterStatus struct {
 }
 
 func main() {
-	// Check if the script was provided with a file argument
-	if len(os.Args) != 2 {
-		fmt.Println("Error: Usage: ./printer-monitor <file_path>")
-	}
-
-	filePath := os.Args[1] // Get the file path from the command-line argument
-
-	// Check if the provided file exists
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		fmt.Println("Error: The provided file does not exist.")
+	// Create the "uploaded_files" directory if it doesn't exist
+	if _, err := os.Stat("uploaded_files"); os.IsNotExist(err) {
+		err := os.Mkdir("uploaded_files", os.ModePerm)
+		if err != nil {
+			fmt.Println("Error creating 'uploaded_files' directory:", err)
+			return
+		}
 	}
 
 	// Print the monitoring message with the polling interval
 	fmt.Printf("Monitoring printers with a polling interval of %s...\n", pollingInterval)
 
-	// Define a list of Mainsail API endpoints for printer status
-	statusURLs := []string{
-		"https://ender.local.antnsn.dev/printer/info", // Add the new status URL here
-	}
+	// Create a channel to signal when a new file is uploaded
+	uploadedFileCh := make(chan string)
+
+	// Start a goroutine to handle file uploads
+	go startUploadServer(uploadedFileCh)
 
 	// Infinite loop for continuous monitoring
 	for {
-		// Iterate through the list of printer status URLs
-		for _, statusURL := range statusURLs {
-			// Send a GET request to the API endpoint to get printer status
-			response, err := http.Get(statusURL)
-			if err != nil {
-				fmt.Println("Error:", err)
-				continue // Continue to the next printer URL on error
-			}
-			defer response.Body.Close()
-
-			// Check if the response status code is 200 (OK)
-			if response.StatusCode != http.StatusOK {
-				fmt.Println("Error: Unexpected status code", response.StatusCode)
-				continue // Continue to the next printer URL on error
+		// Check if there's a new file available for processing
+		select {
+		case newFilePath := <-uploadedFileCh:
+			// Define a list of Mainsail API endpoints for printer status
+			statusURLs := []string{
+				"https://ender.local.antnsn.dev/printer/info", // Add the new status URL here
 			}
 
-			// Decode the JSON response
-			var infoResponse PrinterInfoResponse
-			if err := json.NewDecoder(response.Body).Decode(&infoResponse); err != nil {
-				fmt.Println("Error:", err)
-				continue // Continue to the next printer URL on error
+			// Iterate through the list of printer status URLs
+			for _, statusURL := range statusURLs {
+				// Send a GET request to the API endpoint to get printer status
+				response, err := http.Get(statusURL)
+				if err != nil {
+					fmt.Println("Error:", err)
+					continue // Continue to the next printer URL on error
+				}
+				defer response.Body.Close()
+
+				// Check if the response status code is 200 (OK)
+				if response.StatusCode != http.StatusOK {
+					fmt.Println("Error: Unexpected status code", response.StatusCode)
+					continue // Continue to the next printer URL on error
+				}
+
+				// Decode the JSON response
+				var infoResponse PrinterInfoResponse
+				if err := json.NewDecoder(response.Body).Decode(&infoResponse); err != nil {
+					fmt.Println("Error:", err)
+					continue // Continue to the next printer URL on error
+				}
+
+				// Check if the printer is in the "ready" state
+				if infoResponse.Result.State == "ready" {
+					processReadyPrinter(infoResponse.Result, statusURL, newFilePath)
+				}
 			}
 
-			// Check if the printer is in the "ready" state
-			if infoResponse.Result.State == "ready" {
-				processReadyPrinter(infoResponse.Result, statusURL, filePath)
-				// No need to return; we want to continue monitoring other printers
-			}
+			// Remove the processed file
+			os.Remove(newFilePath)
+		default:
+			// Sleep for the specified polling interval if no new file is uploaded
+			time.Sleep(pollingInterval)
+		}
+	}
+}
+
+// getNewUploadedFile checks if there's a new uploaded file and returns its path if available
+func startUploadServer(uploadedFileCh chan<- string) {
+	http.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
 		}
 
-		// Sleep for the specified polling interval
-		time.Sleep(pollingInterval)
-	}
+		// Parse the incoming form data, including files
+		err := r.ParseMultipartForm(10 * 1024 * 1024) // 10 MB limit
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error parsing form: %s", err), http.StatusBadRequest)
+			return
+		}
+
+		// Get the file from the request
+		file, _, err := r.FormFile("file") // "file" should match the field name in the form
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error retrieving file: %s", err), http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+
+		// Create a new file on the server to save the uploaded file
+		newFilePath := fmt.Sprintf("uploaded_files/%d_%s", time.Now().Unix(), "uploaded_file.txt") // Unique filename
+		newFile, err := os.Create(newFilePath)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error creating file: %s", err), http.StatusInternalServerError)
+			return
+		}
+		defer newFile.Close()
+
+		// Copy the uploaded file data to the new file
+		_, err = io.Copy(newFile, file)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error copying file data: %s", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Signal that a new file is uploaded
+		uploadedFileCh <- newFilePath
+
+		// Respond with a success message
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "File uploaded successfully!")
+	})
+
+	fmt.Printf("File upload server listening on :8081/upload...\n")
+	http.ListenAndServe(":8081", nil)
 }
 
 // processReadyPrinter processes the action for a printer with state "ready"
@@ -152,55 +211,4 @@ func sendFileToOctoPrint(printer PrinterStatus, filePath string) {
 	defer resp.Body.Close()
 
 	fmt.Printf("File sent to OctoPrint on printer '%s'\n", printer.Hostname)
-}
-
-func uploadHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Parse the incoming form data, including files
-	err := r.ParseMultipartForm(10 * 1024 * 1024) // 10 MB limit
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error parsing form: %s", err), http.StatusBadRequest)
-		return
-	}
-
-	// Get the file from the request
-	file, _, err := r.FormFile("file") // "file" should match the field name in the form
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error retrieving file: %s", err), http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-
-	// Create a new file on the server to save the uploaded file
-	newFile, err := os.Create("uploaded_file.txt") // Change the filename as needed
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error creating file: %s", err), http.StatusInternalServerError)
-		return
-	}
-	defer newFile.Close()
-
-	// Copy the uploaded file data to the new file
-	_, err = io.Copy(newFile, file)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error copying file data: %s", err), http.StatusInternalServerError)
-		return
-	}
-
-	// Respond with a success message
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "File uploaded successfully!")
-}
-
-func startUploadServer() {
-	http.HandleFunc(uploadEndpoint, uploadHandler)
-	fmt.Printf("File upload server listening on :8081%s...\n", uploadEndpoint)
-	http.ListenAndServe(":8081", nil)
-}
-
-func init() {
-	go startUploadServer()
 }
